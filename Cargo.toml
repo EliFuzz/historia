@@ -1,0 +1,73 @@
+[package]
+name = "historia"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+memmap2 = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+self_update = { version = "0.43.1", default-features = false, features = [
+    "ureq",
+    "rustls",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = [
+    "NSApplication",
+    "NSButton",
+    "NSCollectionView",
+    "NSCollectionViewFlowLayout",
+    "NSColor",
+    "NSEvent",
+    "NSPanel",
+    "NSResponder",
+    "NSScreen",
+    "NSScrollView",
+    "NSTextContent",
+    "NSTextField",
+    "NSUserInterfaceItemIdentification",
+    "NSView",
+    "NSViewController",
+    "NSVisualEffectView",
+    "NSWindow",
+    "NSWorkspace",
+    "block2",
+] }
+objc2-foundation = { version = "0.3", features = [
+    "NSArray",
+    "NSIndexPath",
+    "NSNotification",
+    "NSOperation",
+    "NSString",
+    "block2",
+] }
+objc2-core-graphics = { version = "0.3", features = ["CGColor"] }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.release.build-override]
+opt-level = 0
+codegen-units = 256
+
+[profile.dist]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

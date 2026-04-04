@@ -1,0 +1,9 @@
+# Build artifacts
+target
+
+# OS
+.DS_Store
+Thumb.db
+
+# IDEs
+.vscode
