@@ -4,7 +4,7 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject};
 use objc2::{MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{NSCollectionView, NSPanel, NSTextField};
-use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSString};
+use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString};
 
 use super::collection::DataSource;
 use crate::hud::state::ItemKind;
@@ -49,6 +49,7 @@ pub fn show_panel() {
     });
     with_search_field(|f| f.setStringValue(&NSString::from_str("")));
     filter_items("");
+    scroll_to_start();
     PANEL.with(|p| SEARCH_FIELD.with(|f| {
         let (Some(panel), Some(field)) = (p.borrow().clone(), f.borrow().clone()) else { return };
         unsafe { let _: bool = msg_send![&*panel, makeFirstResponder: &*field]; }
@@ -94,6 +95,20 @@ fn with_search_field(f: impl FnOnce(&NSTextField)) { SEARCH_FIELD.with(|sf| { if
 fn with_ds_reload(f: impl FnOnce(&DataSource)) {
     DS.with(|d| { if let Some(ds) = d.borrow().clone() { f(&ds); } });
     CV.with(|c| { if let Some(cv) = c.borrow().clone() { cv.reloadData(); } });
+}
+
+fn scroll_to_start() {
+    CV.with(|c| {
+        let Some(cv) = c.borrow().clone() else { return };
+        unsafe {
+            let sv: *mut AnyObject = msg_send![&*cv, enclosingScrollView];
+            if sv.is_null() { return; }
+            let clip: *mut AnyObject = msg_send![sv, contentView];
+            if clip.is_null() { return; }
+            let _: () = msg_send![clip, scrollToPoint: NSPoint::ZERO];
+            let _: () = msg_send![sv, reflectScrolledClipView: clip];
+        }
+    });
 }
 
 fn restore_to_clipboard(item: &crate::hud::state::ClipboardItem) {
