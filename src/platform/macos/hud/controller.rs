@@ -44,8 +44,8 @@ pub fn show_panel() {
     with_panel(|panel| {
         let mtm = MainThreadMarker::new().unwrap();
         super::panel::reposition_panel(panel, mtm);
-        unsafe { let _: () = msg_send![objc_utils::ns_app(), activateIgnoringOtherApps: true]; }
-        panel.makeKeyAndOrderFront(None);
+        panel.orderFrontRegardless();
+        panel.makeKeyWindow();
     });
     with_search_field(|f| f.setStringValue(&NSString::from_str("")));
     filter_items("");

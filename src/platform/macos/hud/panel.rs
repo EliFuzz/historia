@@ -55,9 +55,11 @@ fn configure(panel: &NSPanel) {
     unsafe {
         let _: () = msg_send![panel, setReleasedWhenClosed: false];
         for t in 0..3_usize { let b: *mut AnyObject = msg_send![panel, standardWindowButton: t]; if !b.is_null() { let _: () = msg_send![b, setHidden: true]; } }
+        let _: () = msg_send![panel, setFloatingPanel: true];
+        let _: () = msg_send![panel, setHidesOnDeactivate: false];
     }
-    panel.setLevel(101);
-    panel.setCollectionBehavior(NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::Stationary | NSWindowCollectionBehavior::FullScreenAuxiliary | NSWindowCollectionBehavior::IgnoresCycle);
+    panel.setLevel(25);
+    panel.setCollectionBehavior(NSWindowCollectionBehavior::Stationary | NSWindowCollectionBehavior::MoveToActiveSpace | NSWindowCollectionBehavior::FullScreenAuxiliary | NSWindowCollectionBehavior::IgnoresCycle);
     panel.setOpaque(false); panel.setHasShadow(false); panel.setBackgroundColor(Some(&NSColor::clearColor()));
     unsafe { let _: () = msg_send![panel, setTitlebarAppearsTransparent: true]; }
 }
