@@ -4,7 +4,9 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject};
 use objc2::{MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{NSCollectionView, NSPanel, NSTextField};
-use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString};
+use objc2_foundation::{
+    MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString,
+};
 
 use super::collection::DataSource;
 use crate::hud::state::ItemKind;
@@ -31,14 +33,28 @@ pub fn init(panel: Retained<NSPanel>, ds: Retained<DataSource>, cv: Retained<NSC
     CV.with(|c| *c.borrow_mut() = Some(cv));
 }
 
-pub fn set_search_field(f: Retained<NSTextField>) { SEARCH_FIELD.with(|sf| *sf.borrow_mut() = Some(f)); }
-pub fn set_skip_next_capture() { SKIP.with(|s| s.set(true)); }
-
-pub fn should_skip_capture() -> bool {
-    SKIP.with(|s| { let v = s.get(); s.set(false); v })
+pub fn set_search_field(f: Retained<NSTextField>) {
+    SEARCH_FIELD.with(|sf| *sf.borrow_mut() = Some(f));
+}
+pub fn set_skip_next_capture() {
+    SKIP.with(|s| s.set(true));
 }
 
-pub fn toggle_panel() { if is_panel_visible() { hide_panel(); } else { show_panel(); } }
+pub fn should_skip_capture() -> bool {
+    SKIP.with(|s| {
+        let v = s.get();
+        s.set(false);
+        v
+    })
+}
+
+pub fn toggle_panel() {
+    if is_panel_visible() {
+        hide_panel();
+    } else {
+        show_panel();
+    }
+}
 
 pub fn show_panel() {
     with_panel(|panel| {
@@ -50,15 +66,23 @@ pub fn show_panel() {
     with_search_field(|f| f.setStringValue(&NSString::from_str("")));
     filter_items("");
     scroll_to_start();
-    PANEL.with(|p| SEARCH_FIELD.with(|f| {
-        let (Some(panel), Some(field)) = (p.borrow().clone(), f.borrow().clone()) else { return };
-        unsafe { let _: bool = msg_send![&*panel, makeFirstResponder: &*field]; }
-    }));
+    PANEL.with(|p| {
+        SEARCH_FIELD.with(|f| {
+            let (Some(panel), Some(field)) = (p.borrow().clone(), f.borrow().clone()) else {
+                return;
+            };
+            unsafe {
+                let _: bool = msg_send![&*panel, makeFirstResponder: &*field];
+            }
+        })
+    });
 }
 
 pub fn hide_panel() {
     with_panel(|p| p.orderOut(None));
-    unsafe { let _: () = msg_send![objc_utils::ns_app(), hide: std::ptr::null::<AnyObject>()]; }
+    unsafe {
+        let _: () = msg_send![objc_utils::ns_app(), hide: std::ptr::null::<AnyObject>()];
+    }
 }
 
 pub fn is_panel_visible() -> bool {
@@ -68,33 +92,86 @@ pub fn is_panel_visible() -> bool {
 pub fn copy_item_at_display_index(idx: usize) {
     DS.with(|d| {
         let Some(ds) = d.borrow().clone() else { return };
-        let Some(item) = ds.item_at_display_index(idx) else { return };
+        let Some(item) = ds.item_at_display_index(idx) else {
+            return;
+        };
         set_skip_next_capture();
         restore_to_clipboard(&item);
     });
     hide_panel();
 }
 
-pub fn delete_item_by_id(id: usize) { with_ds_reload(|ds| ds.remove_item_by_id(id)); }
-pub fn delete_all() { with_ds_reload(|ds| ds.remove_all()); }
-pub fn filter_items(q: &str) { with_ds_reload(|ds| ds.set_filter(q)); }
+pub fn delete_item_by_id(id: usize) {
+    with_ds_reload(|ds| ds.remove_item_by_id(id));
+}
+pub fn delete_all() {
+    with_ds_reload(|ds| ds.remove_all());
+}
+pub fn filter_items(q: &str) {
+    with_ds_reload(|ds| ds.set_filter(q));
+}
+pub fn paste_into_search() {
+    unsafe {
+        let pb: *mut AnyObject =
+            msg_send![AnyClass::get(c"NSPasteboard").unwrap(), generalPasteboard];
+        let text: *const NSString =
+            msg_send![pb, stringForType: &*NSString::from_str(crate::hud::state::UTI_PLAIN_TEXT)];
+        if text.is_null() {
+            return;
+        }
+        with_search_field(|field| field.setStringValue(&*text));
+        filter_items(&(*text).to_string());
+    }
+}
 
-pub fn add_clipboard_item(content: String, app_name: String, kind: ItemKind, image_data: Option<(String, Vec<u8>)>) {
+pub fn add_clipboard_item(
+    content: String,
+    app_name: String,
+    kind: ItemKind,
+    image_data: Option<(String, Vec<u8>)>,
+) {
     let settings = crate::hud::settings::get();
     with_ds_reload(|ds| {
         ds.add_item(content, app_name, kind, image_data);
-        ds.enforce_limits(settings.items_limit.value(), settings.retention_period.as_secs());
+        ds.enforce_limits(
+            settings.items_limit.value(),
+            settings.retention_period.as_secs(),
+        );
     });
 }
 
-pub fn action_target() -> Option<Retained<ActionTarget>> { TARGET.with(|t| t.borrow().clone()) }
-pub fn search_delegate_ref() -> Option<Retained<SearchDelegate>> { SEARCH_DEL.with(|d| d.borrow().clone()) }
+pub fn action_target() -> Option<Retained<ActionTarget>> {
+    TARGET.with(|t| t.borrow().clone())
+}
+pub fn search_delegate_ref() -> Option<Retained<SearchDelegate>> {
+    SEARCH_DEL.with(|d| d.borrow().clone())
+}
 
-fn with_panel(f: impl FnOnce(&NSPanel)) { PANEL.with(|p| { if let Some(panel) = p.borrow().clone() { f(&panel); } }); }
-fn with_search_field(f: impl FnOnce(&NSTextField)) { SEARCH_FIELD.with(|sf| { if let Some(field) = sf.borrow().clone() { f(&field); } }); }
+fn with_panel(f: impl FnOnce(&NSPanel)) {
+    PANEL.with(|p| {
+        if let Some(panel) = p.borrow().clone() {
+            f(&panel);
+        }
+    });
+}
+fn with_search_field(f: impl FnOnce(&NSTextField)) {
+    SEARCH_FIELD.with(|sf| {
+        if let Some(field) = sf.borrow().clone() {
+            f(&field);
+        }
+    });
+}
 fn with_ds_reload(f: impl FnOnce(&DataSource)) {
-    DS.with(|d| { if let Some(ds) = d.borrow().clone() { f(&ds); } });
-    CV.with(|c| { if let Some(cv) = c.borrow().clone() { cv.reloadData(); } });
+    DS.with(|d| {
+        if let Some(ds) = d.borrow().clone() {
+            f(&ds);
+        }
+    });
+    CV.with(|c| {
+        if let Some(cv) = c.borrow().clone() {
+            cv.reloadData();
+        }
+    });
 }
 
 fn scroll_to_start() {
@@ -102,9 +179,13 @@ fn scroll_to_start() {
         let Some(cv) = c.borrow().clone() else { return };
         unsafe {
             let sv: *mut AnyObject = msg_send![&*cv, enclosingScrollView];
-            if sv.is_null() { return; }
+            if sv.is_null() {
+                return;
+            }
             let clip: *mut AnyObject = msg_send![sv, contentView];
-            if clip.is_null() { return; }
+            if clip.is_null() {
+                return;
+            }
             let _: () = msg_send![clip, scrollToPoint: NSPoint::ZERO];
             let _: () = msg_send![sv, reflectScrolledClipView: clip];
         }
@@ -113,18 +194,28 @@ fn scroll_to_start() {
 
 fn restore_to_clipboard(item: &crate::hud::state::ClipboardItem) {
     unsafe {
-        let pb: *mut AnyObject = msg_send![AnyClass::get(c"NSPasteboard").unwrap(), generalPasteboard];
+        let pb: *mut AnyObject =
+            msg_send![AnyClass::get(c"NSPasteboard").unwrap(), generalPasteboard];
         let _: i64 = msg_send![pb, clearContents];
         if let Some(ref blob) = item.blob_path {
-            let Some((uti, data)) = crate::hud::persistence::load_blob_data(blob) else { return };
+            let Some((uti, data)) = crate::hud::persistence::load_blob_data(blob) else {
+                return;
+            };
             let ns_type = NSString::from_str(&uti);
             let ns_data: *mut AnyObject = msg_send![AnyClass::get(c"NSData").unwrap(), dataWithBytes: data.as_ptr() as *const std::ffi::c_void, length: data.len()];
-            if !ns_data.is_null() { let _: bool = msg_send![pb, setData: ns_data, forType: &*ns_type]; }
+            if !ns_data.is_null() {
+                let _: bool = msg_send![pb, setData: ns_data, forType: &*ns_type];
+            }
             return;
         }
         let (s, uti) = match &item.kind {
-            ItemKind::Text | ItemKind::Color(_) => (item.content.clone(), crate::hud::state::UTI_PLAIN_TEXT),
-            _ => (format!("file://{}", item.content), crate::hud::state::UTI_FILE_URL),
+            ItemKind::Text | ItemKind::Color(_) => {
+                (item.content.clone(), crate::hud::state::UTI_PLAIN_TEXT)
+            }
+            _ => (
+                format!("file://{}", item.content),
+                crate::hud::state::UTI_FILE_URL,
+            ),
         };
         let ns = NSString::from_str(&s);
         let key = NSString::from_str(uti);

@@ -16,7 +16,10 @@ struct AppIvars {
 
 impl Default for AppIvars {
     fn default() -> Self {
-        Self { _tokens: OnceCell::new(), _monitor: OnceCell::new() }
+        Self {
+            _tokens: OnceCell::new(),
+            _monitor: OnceCell::new(),
+        }
     }
 }
 
@@ -37,7 +40,10 @@ define_class!(
             let mut tokens = setup_observers();
             tokens.extend(events::setup_event_monitors());
             self.ivars()._tokens.set(tokens).ok();
-            self.ivars()._monitor.set(clipboard::start_monitoring(mtm)).ok();
+            self.ivars()
+                ._monitor
+                .set(clipboard::start_monitoring(mtm))
+                .ok();
             NSApplication::sharedApplication(mtm)
                 .setActivationPolicy(NSApplicationActivationPolicy::Accessory);
         }

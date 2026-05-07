@@ -15,7 +15,9 @@ fn main() {
     std::thread::spawn(move || {
         for msg in rx {
             match msg {
-                updater::Msg::UpdateAvailable(v) => eprintln!("historia v{VERSION} → v{v} available"),
+                updater::Msg::UpdateAvailable(v) => {
+                    eprintln!("historia v{VERSION} → v{v} available")
+                }
             }
         }
     });

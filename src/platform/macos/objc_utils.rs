@@ -16,7 +16,9 @@ pub fn gray(v: f64, a: f64) -> Retained<NSColor> {
 pub unsafe fn set_layer_bg(view: &AnyObject, r: f64, g: f64, b: f64, a: f64) {
     let _: () = msg_send![view, setWantsLayer: true];
     let layer: *mut AnyObject = msg_send![view, layer];
-    if layer.is_null() { return; }
+    if layer.is_null() {
+        return;
+    }
     let bg = rgba(r, g, b, a);
     let cg: *const CGColor = msg_send![&*bg, CGColor];
     let _: () = msg_send![layer, setBackgroundColor: cg];
@@ -24,14 +26,18 @@ pub unsafe fn set_layer_bg(view: &AnyObject, r: f64, g: f64, b: f64, a: f64) {
 
 pub unsafe fn set_layer_corner(view: &AnyObject, radius: f64) {
     let layer: *mut AnyObject = msg_send![view, layer];
-    if layer.is_null() { return; }
+    if layer.is_null() {
+        return;
+    }
     let _: () = msg_send![layer, setCornerRadius: radius];
     let _: () = msg_send![layer, setMasksToBounds: true];
 }
 
 pub unsafe fn set_layer_border(view: &AnyObject, r: f64, g: f64, b: f64, a: f64, width: f64) {
     let layer: *mut AnyObject = msg_send![view, layer];
-    if layer.is_null() { return; }
+    if layer.is_null() {
+        return;
+    }
     let color = rgba(r, g, b, a);
     let cg: *const CGColor = msg_send![&*color, CGColor];
     let _: () = msg_send![layer, setBorderColor: cg];
@@ -64,7 +70,9 @@ pub fn label(mtm: MainThreadMarker, size: f64, alpha: f64, wrap: bool) -> Retain
 pub fn button(mtm: MainThreadMarker, size: NSSize, transparent: bool) -> Retained<NSButton> {
     let btn = NSButton::init(NSButton::alloc(mtm));
     btn.setFrame(NSRect::new(NSPoint::ZERO, size));
-    if transparent { btn.setTransparent(true); }
+    if transparent {
+        btn.setTransparent(true);
+    }
     btn.setBordered(false);
     btn.setTitle(ns_string!(""));
     btn
@@ -92,12 +100,16 @@ pub fn set_symbol_image(btn: &NSButton, name: &str, point_size: f64, tint: &NSCo
             AnyClass::get(c"NSImage").unwrap(),
             imageWithSystemSymbolName: &*sym, accessibilityDescription: nil
         ];
-        if base.is_null() { return; }
+        if base.is_null() {
+            return;
+        }
         let config: *mut AnyObject = msg_send![
             AnyClass::get(c"NSImageSymbolConfiguration").unwrap(),
             configurationWithPointSize: point_size, weight: 0.0_f64
         ];
-        let image = if config.is_null() { base } else {
+        let image = if config.is_null() {
+            base
+        } else {
             let sized: *mut AnyObject = msg_send![base, imageWithSymbolConfiguration: config];
             if sized.is_null() { base } else { sized }
         };
@@ -107,7 +119,12 @@ pub fn set_symbol_image(btn: &NSButton, name: &str, point_size: f64, tint: &NSCo
     }
 }
 
-pub unsafe fn wire_action(target: &AnyObject, view: &AnyObject, sel_name: &std::ffi::CStr, tag: isize) {
+pub unsafe fn wire_action(
+    target: &AnyObject,
+    view: &AnyObject,
+    sel_name: &std::ffi::CStr,
+    tag: isize,
+) {
     let _: () = msg_send![view, setTag: tag];
     let _: () = msg_send![view, setTarget: target];
     let _: () = msg_send![view, setAction: Sel::register(sel_name)];
@@ -121,7 +138,9 @@ pub unsafe fn set_dark_appearance(view: *mut AnyObject) {
     let cls = AnyClass::get(c"NSAppearance").unwrap();
     let name = NSString::from_str("NSAppearanceNameVibrantDark");
     let dark: *const AnyObject = msg_send![cls, appearanceNamed: &*name];
-    if dark.is_null() { return; }
+    if dark.is_null() {
+        return;
+    }
     let _: () = msg_send![view, setAppearance: dark];
 }
 

@@ -2,13 +2,13 @@ use std::cell::RefCell;
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
-use objc2::{define_class, msg_send, DefinedClass, MainThreadOnly};
+use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{NSCollectionViewItem, NSView};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize};
 
 use super::card_preview;
 use crate::hud::state::{ClipboardItem, VISIBLE_CARD_COUNT};
-use crate::platform::macos::objc_utils::{self, label, button, rgba};
+use crate::platform::macos::objc_utils::{self, button, label, rgba};
 
 const PAD: f64 = 10.0;
 const FOOTER_H: f64 = 16.0;
@@ -27,7 +27,14 @@ pub(crate) struct CardIvars {
 
 impl Default for CardIvars {
     fn default() -> Self {
-        Self { content: RefCell::new(None), footer: RefCell::new(None), shortcut: RefCell::new(None), image: RefCell::new(None), del_btn: RefCell::new(None), click_btn: RefCell::new(None) }
+        Self {
+            content: RefCell::new(None),
+            footer: RefCell::new(None),
+            shortcut: RefCell::new(None),
+            image: RefCell::new(None),
+            del_btn: RefCell::new(None),
+            click_btn: RefCell::new(None),
+        }
     }
 }
 
@@ -74,43 +81,94 @@ impl CardItem {
     pub fn configure(&self, item: &ClipboardItem, index: usize, sz: NSSize) {
         let iv = self.ivars();
         self.view().setFrameSize(sz);
-        unsafe { objc_utils::set_layer_corner(&*self.view(), 8.0); }
+        unsafe {
+            objc_utils::set_layer_corner(&*self.view(), 8.0);
+        }
         let cw = sz.width - PAD * 2.0;
         let ch = sz.height - PAD - FOOTER_PAD - FOOTER_H - 4.0;
-        let cf = NSRect::new(NSPoint::new(PAD, FOOTER_H + 4.0 + FOOTER_PAD), NSSize::new(cw, ch));
+        let cf = NSRect::new(
+            NSPoint::new(PAD, FOOTER_H + 4.0 + FOOTER_PAD),
+            NSSize::new(cw, ch),
+        );
         let is_text = item.kind.is_text();
         if let Some(lbl) = iv.content.borrow().as_ref() {
-            lbl.setFrame(cf); lbl.setHidden(!is_text);
+            lbl.setFrame(cf);
+            lbl.setHidden(!is_text);
             if is_text {
                 let lines: String = item.content.lines().take(6).collect::<Vec<_>>().join("\n");
-                let preview = if lines.len() > 200 { format!("{}...", &lines[..197]) } else { lines };
+                let preview = if lines.len() > 200 {
+                    format!("{}...", &lines[..197])
+                } else {
+                    lines
+                };
                 lbl.setStringValue(&objc2_foundation::NSString::from_str(&preview));
             }
         }
         if let Some(lbl) = iv.footer.borrow().as_ref() {
-            lbl.setFrame(NSRect::new(NSPoint::new(PAD, FOOTER_PAD), NSSize::new(cw * 0.7, FOOTER_H)));
+            lbl.setFrame(NSRect::new(
+                NSPoint::new(PAD, FOOTER_PAD),
+                NSSize::new(cw * 0.7, FOOTER_H),
+            ));
             lbl.setStringValue(&objc2_foundation::NSString::from_str(&item.display_name()));
         }
         if let Some(lbl) = iv.shortcut.borrow().as_ref() {
-            lbl.setFrame(NSRect::new(NSPoint::new(sz.width - PAD - cw * 0.3, FOOTER_PAD), NSSize::new(cw * 0.3, FOOTER_H)));
-            let txt = if index < VISIBLE_CARD_COUNT { format!("\u{2318}{}", index + 1) } else { String::new() };
+            lbl.setFrame(NSRect::new(
+                NSPoint::new(sz.width - PAD - cw * 0.3, FOOTER_PAD),
+                NSSize::new(cw * 0.3, FOOTER_H),
+            ));
+            let txt = if index < VISIBLE_CARD_COUNT {
+                format!("\u{2318}{}", index + 1)
+            } else {
+                String::new()
+            };
             lbl.setStringValue(&objc2_foundation::NSString::from_str(&txt));
         }
         if let Some(v) = iv.image.borrow().as_ref() {
-            v.setFrame(cf); v.setHidden(is_text);
-            if is_text { unsafe { let _: () = msg_send![&**v, setImage: std::ptr::null::<AnyObject>()]; } }
-            else { card_preview::configure_preview(v, item); }
+            v.setFrame(cf);
+            v.setHidden(is_text);
+            if is_text {
+                unsafe {
+                    let _: () = msg_send![&**v, setImage: std::ptr::null::<AnyObject>()];
+                }
+            } else {
+                card_preview::configure_preview(v, item);
+            }
         }
-        wire_btn(iv.del_btn.borrow().as_ref(), item.id as isize, NSRect::new(NSPoint::new(sz.width - DEL_SIZE - DEL_MARGIN, sz.height - DEL_SIZE - DEL_MARGIN), NSSize::new(DEL_SIZE, DEL_SIZE)), c"deleteItem:");
-        wire_btn(iv.click_btn.borrow().as_ref(), index as isize, NSRect::new(NSPoint::ZERO, sz), c"selectItem:");
+        wire_btn(
+            iv.del_btn.borrow().as_ref(),
+            item.id as isize,
+            NSRect::new(
+                NSPoint::new(
+                    sz.width - DEL_SIZE - DEL_MARGIN,
+                    sz.height - DEL_SIZE - DEL_MARGIN,
+                ),
+                NSSize::new(DEL_SIZE, DEL_SIZE),
+            ),
+            c"deleteItem:",
+        );
+        wire_btn(
+            iv.click_btn.borrow().as_ref(),
+            index as isize,
+            NSRect::new(NSPoint::ZERO, sz),
+            c"selectItem:",
+        );
     }
 }
 
-fn wire_btn(btn: Option<&Retained<objc2_app_kit::NSButton>>, tag: isize, frame: NSRect, sel: &std::ffi::CStr) {
+fn wire_btn(
+    btn: Option<&Retained<objc2_app_kit::NSButton>>,
+    tag: isize,
+    frame: NSRect,
+    sel: &std::ffi::CStr,
+) {
     let Some(btn) = btn else { return };
     btn.setFrame(frame);
-    let Some(target) = super::controller::action_target() else { return };
-    unsafe { objc_utils::wire_action(&target, btn, sel, tag); }
+    let Some(target) = super::controller::action_target() else {
+        return;
+    };
+    unsafe {
+        objc_utils::wire_action(&target, btn, sel, tag);
+    }
 }
 
 fn create_container(mtm: MainThreadMarker) -> Retained<NSView> {
@@ -125,6 +183,9 @@ fn create_container(mtm: MainThreadMarker) -> Retained<NSView> {
 
 fn create_del_btn(mtm: MainThreadMarker) -> Retained<objc2_app_kit::NSButton> {
     let btn = objc_utils::symbol_button(mtm, DEL_SIZE, "xmark", 10.0, &rgba(1.0, 1.0, 1.0, 0.80));
-    unsafe { objc_utils::set_layer_bg(&btn, 0.0, 0.0, 0.0, 0.50); objc_utils::set_layer_corner(&btn, DEL_SIZE / 2.0); }
+    unsafe {
+        objc_utils::set_layer_bg(&btn, 0.0, 0.0, 0.0, 0.50);
+        objc_utils::set_layer_corner(&btn, DEL_SIZE / 2.0);
+    }
     btn
 }
