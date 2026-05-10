@@ -3,7 +3,7 @@ use std::cell::{Cell, RefCell};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject};
 use objc2::{MainThreadOnly, define_class, msg_send};
-use objc2_app_kit::{NSCollectionView, NSPanel, NSTextField};
+use objc2_app_kit::{NSButton, NSCollectionView, NSPanel, NSTextField};
 use objc2_foundation::{
     MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString,
 };
@@ -16,6 +16,7 @@ thread_local! {
     static PANEL: RefCell<Option<Retained<NSPanel>>> = const { RefCell::new(None) };
     static DS: RefCell<Option<Retained<DataSource>>> = const { RefCell::new(None) };
     static CV: RefCell<Option<Retained<NSCollectionView>>> = const { RefCell::new(None) };
+    static DEL_BTNS: RefCell<Vec<Retained<NSButton>>> = const { RefCell::new(Vec::new()) };
     static TARGET: RefCell<Option<Retained<ActionTarget>>> = const { RefCell::new(None) };
     static SEARCH_DEL: RefCell<Option<Retained<SearchDelegate>>> = const { RefCell::new(None) };
     static SEARCH_FIELD: RefCell<Option<Retained<NSTextField>>> = const { RefCell::new(None) };
@@ -31,6 +32,20 @@ pub fn init(panel: Retained<NSPanel>, ds: Retained<DataSource>, cv: Retained<NSC
     PANEL.with(|p| *p.borrow_mut() = Some(panel));
     DS.with(|d| *d.borrow_mut() = Some(ds));
     CV.with(|c| *c.borrow_mut() = Some(cv));
+}
+
+fn refresh_del_buttons() {
+    let (Some(cv), Some(ds), Some(target)) = (
+        CV.with(|c| c.borrow().clone()),
+        DS.with(|d| d.borrow().clone()),
+        TARGET.with(|t| t.borrow().clone()),
+    ) else {
+        return;
+    };
+    let mtm = MainThreadMarker::new().expect("main thread");
+    DEL_BTNS.with(|b| {
+        super::card::refresh_del_buttons(&cv, &ds, &target, &mut b.borrow_mut(), mtm);
+    });
 }
 
 pub fn set_search_field(f: Retained<NSTextField>) {
@@ -172,6 +187,7 @@ fn with_ds_reload(f: impl FnOnce(&DataSource)) {
             cv.reloadData();
         }
     });
+    refresh_del_buttons();
 }
 
 fn scroll_to_start() {

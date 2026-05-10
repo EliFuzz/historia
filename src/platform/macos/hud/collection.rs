@@ -77,6 +77,7 @@ impl DataSource {
         crate::hud::persistence::remove_by_id(id);
         self.refresh();
     }
+
     pub fn remove_all(&self) {
         crate::hud::persistence::clear();
         self.refresh();

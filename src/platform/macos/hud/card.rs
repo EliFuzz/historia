@@ -1,27 +1,26 @@
 use std::cell::RefCell;
 
 use objc2::rc::Retained;
-use objc2::runtime::AnyObject;
+use objc2::runtime::{AnyClass, AnyObject};
 use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send};
-use objc2_app_kit::{NSCollectionViewItem, NSView};
+use objc2_app_kit::{NSButton, NSCollectionView, NSCollectionViewItem, NSView};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize};
 
 use super::card_preview;
+use super::collection::DataSource;
+use super::controller::ActionTarget;
 use crate::hud::state::{ClipboardItem, VISIBLE_CARD_COUNT};
 use crate::platform::macos::objc_utils::{self, button, label, rgba};
 
 const PAD: f64 = 10.0;
 const FOOTER_H: f64 = 16.0;
 const FOOTER_PAD: f64 = 6.0;
-const DEL_SIZE: f64 = 22.0;
-const DEL_MARGIN: f64 = 3.0;
 
 pub(crate) struct CardIvars {
     content: RefCell<Option<Retained<objc2_app_kit::NSTextField>>>,
     footer: RefCell<Option<Retained<objc2_app_kit::NSTextField>>>,
     shortcut: RefCell<Option<Retained<objc2_app_kit::NSTextField>>>,
     image: RefCell<Option<Retained<NSView>>>,
-    del_btn: RefCell<Option<Retained<objc2_app_kit::NSButton>>>,
     click_btn: RefCell<Option<Retained<objc2_app_kit::NSButton>>>,
 }
 
@@ -32,7 +31,6 @@ impl Default for CardIvars {
             footer: RefCell::new(None),
             shortcut: RefCell::new(None),
             image: RefCell::new(None),
-            del_btn: RefCell::new(None),
             click_btn: RefCell::new(None),
         }
     }
@@ -66,12 +64,11 @@ define_class!(
             s.setAlignment(objc2_app_kit::NSTextAlignment::Right);
             let iv = card_preview::create_image_view(mtm);
             let cb = button(mtm, NSSize::new(100.0, 100.0), true);
-            let db = create_del_btn(mtm);
-            for v in [&*c as &NSView, &*f, &*s, &iv, &*cb as &NSView, &*db as &NSView] { container.addSubview(v); }
+            for v in [&*c as &NSView, &*f, &*s, &iv, &*cb as &NSView] { container.addSubview(v); }
             let ivars = self.ivars();
             *ivars.content.borrow_mut() = Some(c); *ivars.footer.borrow_mut() = Some(f);
             *ivars.shortcut.borrow_mut() = Some(s); *ivars.image.borrow_mut() = Some(iv);
-            *ivars.del_btn.borrow_mut() = Some(db); *ivars.click_btn.borrow_mut() = Some(cb);
+            *ivars.click_btn.borrow_mut() = Some(cb);
             unsafe { let _: () = msg_send![self, setView: &*container]; }
         }
     }
@@ -135,18 +132,6 @@ impl CardItem {
             }
         }
         wire_btn(
-            iv.del_btn.borrow().as_ref(),
-            item.id as isize,
-            NSRect::new(
-                NSPoint::new(
-                    sz.width - DEL_SIZE - DEL_MARGIN,
-                    sz.height - DEL_SIZE - DEL_MARGIN,
-                ),
-                NSSize::new(DEL_SIZE, DEL_SIZE),
-            ),
-            c"deleteItem:",
-        );
-        wire_btn(
             iv.click_btn.borrow().as_ref(),
             index as isize,
             NSRect::new(NSPoint::ZERO, sz),
@@ -171,6 +156,57 @@ fn wire_btn(
     }
 }
 
+pub fn refresh_del_buttons(
+    cv: &NSCollectionView,
+    ds: &DataSource,
+    target: &ActionTarget,
+    btns: &mut Vec<Retained<NSButton>>,
+    mtm: MainThreadMarker,
+) {
+    unsafe { let _: () = msg_send![cv, layoutSubtreeIfNeeded]; }
+    let count: isize = unsafe { msg_send![cv, numberOfItemsInSection: 0_isize] };
+    let count = count.max(0) as usize;
+    while btns.len() < count {
+        let btn = objc_utils::symbol_button(mtm, 22.0, "xmark", 10.0, &rgba(1.0, 1.0, 1.0, 0.80));
+        unsafe {
+            objc_utils::set_layer_bg(&btn, 0.0, 0.0, 0.0, 0.50);
+            objc_utils::set_layer_corner(&btn, 11.0);
+        }
+        cv.addSubview(&btn);
+        btns.push(btn);
+    }
+    for (idx, btn) in btns.iter().enumerate() {
+        let frame = (idx < count)
+            .then(|| card_frame(cv, idx))
+            .flatten()
+            .zip(ds.item_at_display_index(idx));
+        let Some((rect, item)) = frame else {
+            btn.setHidden(true);
+            continue;
+        };
+        btn.setHidden(false);
+        btn.setFrame(NSRect::new(
+            NSPoint::new(rect.origin.x + rect.size.width - 25.0, rect.origin.y + 3.0),
+            NSSize::new(22.0, 22.0),
+        ));
+        unsafe { objc_utils::wire_action(target, btn, c"deleteItem:", item.id as isize); }
+    }
+}
+
+fn card_frame(cv: &NSCollectionView, idx: usize) -> Option<NSRect> {
+    unsafe {
+        let layout: *mut AnyObject = msg_send![cv, collectionViewLayout];
+        let cls = AnyClass::get(c"NSIndexPath").unwrap();
+        let ip: *mut AnyObject =
+            msg_send![cls, indexPathForItem: idx as isize, inSection: 0_isize];
+        let attrs: *mut AnyObject = msg_send![layout, layoutAttributesForItemAtIndexPath: ip];
+        if attrs.is_null() {
+            return None;
+        }
+        Some(msg_send![attrs, frame])
+    }
+}
+
 fn create_container(mtm: MainThreadMarker) -> Retained<NSView> {
     let v = objc_utils::view_with_frame(mtm, NSRect::new(NSPoint::ZERO, NSSize::new(100.0, 100.0)));
     unsafe {
@@ -181,11 +217,3 @@ fn create_container(mtm: MainThreadMarker) -> Retained<NSView> {
     v
 }
 
-fn create_del_btn(mtm: MainThreadMarker) -> Retained<objc2_app_kit::NSButton> {
-    let btn = objc_utils::symbol_button(mtm, DEL_SIZE, "xmark", 10.0, &rgba(1.0, 1.0, 1.0, 0.80));
-    unsafe {
-        objc_utils::set_layer_bg(&btn, 0.0, 0.0, 0.0, 0.50);
-        objc_utils::set_layer_corner(&btn, DEL_SIZE / 2.0);
-    }
-    btn
-}
