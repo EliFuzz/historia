@@ -45,6 +45,7 @@ unsafe extern "C" {
 }
 
 const KEYCODES: [u16; VISIBLE_CARD_COUNT] = [18, 19, 20, 21, 23, 22, 26, 28, 25];
+const KEY_A: u16 = 0;
 const KEY_V: u16 = 9;
 const MASK_KEY_DOWN: u64 = 1 << 10;
 const MASK_LMOUSE: u64 = 1 << 1;
@@ -131,6 +132,10 @@ fn handle_key(e: &NSEvent) -> bool {
     let flags: u64 = unsafe { msg_send![e, modifierFlags] };
     if flags & MASK_CMD == 0 {
         return false;
+    }
+    if code == KEY_A {
+        controller::select_search_text();
+        return true;
     }
     if code == KEY_V {
         controller::paste_into_search();

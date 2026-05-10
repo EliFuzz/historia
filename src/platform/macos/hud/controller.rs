@@ -138,6 +138,11 @@ pub fn paste_into_search() {
         filter_items(&(*text).to_string());
     }
 }
+pub fn select_search_text() {
+    with_search_field(|field| unsafe {
+        let _: () = msg_send![field, selectText: std::ptr::null::<AnyObject>()];
+    });
+}
 
 pub fn add_clipboard_item(
     content: String,
