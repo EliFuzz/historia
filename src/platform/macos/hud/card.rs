@@ -94,7 +94,7 @@ impl CardItem {
             if is_text {
                 let lines: String = item.content.lines().take(6).collect::<Vec<_>>().join("\n");
                 let preview = if lines.len() > 200 {
-                    format!("{}...", &lines[..197])
+                    format!("{}...", &lines[..lines.floor_char_boundary(197)])
                 } else {
                     lines
                 };
@@ -163,7 +163,9 @@ pub fn refresh_del_buttons(
     btns: &mut Vec<Retained<NSButton>>,
     mtm: MainThreadMarker,
 ) {
-    unsafe { let _: () = msg_send![cv, layoutSubtreeIfNeeded]; }
+    unsafe {
+        let _: () = msg_send![cv, layoutSubtreeIfNeeded];
+    }
     let count: isize = unsafe { msg_send![cv, numberOfItemsInSection: 0_isize] };
     let count = count.max(0) as usize;
     while btns.len() < count {
@@ -189,7 +191,9 @@ pub fn refresh_del_buttons(
             NSPoint::new(rect.origin.x + rect.size.width - 25.0, rect.origin.y + 3.0),
             NSSize::new(22.0, 22.0),
         ));
-        unsafe { objc_utils::wire_action(target, btn, c"deleteItem:", item.id as isize); }
+        unsafe {
+            objc_utils::wire_action(target, btn, c"deleteItem:", item.id as isize);
+        }
     }
 }
 
@@ -197,8 +201,7 @@ fn card_frame(cv: &NSCollectionView, idx: usize) -> Option<NSRect> {
     unsafe {
         let layout: *mut AnyObject = msg_send![cv, collectionViewLayout];
         let cls = AnyClass::get(c"NSIndexPath").unwrap();
-        let ip: *mut AnyObject =
-            msg_send![cls, indexPathForItem: idx as isize, inSection: 0_isize];
+        let ip: *mut AnyObject = msg_send![cls, indexPathForItem: idx as isize, inSection: 0_isize];
         let attrs: *mut AnyObject = msg_send![layout, layoutAttributesForItemAtIndexPath: ip];
         if attrs.is_null() {
             return None;
@@ -216,4 +219,3 @@ fn create_container(mtm: MainThreadMarker) -> Retained<NSView> {
     }
     v
 }
-
